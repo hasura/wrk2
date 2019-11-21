@@ -28,6 +28,7 @@ static struct config {
 
 static struct {
     stats *requests;
+    stats *latency;
     pthread_mutex_t mutex;
 } statistics;
 
@@ -108,12 +109,18 @@ int main(int argc, char **argv) {
 
     pthread_mutex_init(&statistics.mutex, NULL);
     statistics.requests = stats_alloc(10);
+    printf("%d\n", cfg.rate * cfg.duration);
+    statistics.latency = stats_alloc(cfg.rate * cfg.duration);
     thread *threads = zcalloc(cfg.threads * sizeof(thread));
 
     hdr_init(1, MAX_LATENCY, 3, &(statistics.requests->histogram));
 
 
     lua_State *L = script_create(cfg.script, url, headers);
+    // The final stats lua function `done` is executed by the above lua script.
+    // This lua script was not initialized with arguments before
+    // Doing this helps `done` function to get input arguments
+    script_init_main(L, argc - optind, &argv[optind]);
     if (!script_resolve(L, host, service)) {
         char *msg = strerror(errno);
         fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
@@ -199,13 +206,12 @@ int main(int argc, char **argv) {
     long double req_per_s   = complete   / runtime_s;
     long double bytes_per_s = bytes      / runtime_s;
 
-    stats *latency_stats = stats_alloc(10);
-    latency_stats->min = hdr_min(latency_histogram);
-    latency_stats->max = hdr_max(latency_histogram);
-    latency_stats->histogram = latency_histogram;
+    statistics.latency->min = hdr_min(latency_histogram);
+    statistics.latency->max = hdr_max(latency_histogram);
+    statistics.latency->histogram = latency_histogram;
 
     print_stats_header();
-    print_stats("Latency", latency_stats, format_time_us);
+    print_stats("Latency", statistics.latency, format_time_us);
     print_stats("Req/Sec", statistics.requests, format_metric);
 //    if (cfg.latency) print_stats_latency(latency_stats);
 
@@ -241,7 +247,7 @@ int main(int argc, char **argv) {
     if (script_has_done(L)) {
         script_summary(L, runtime_us, complete, bytes);
         script_errors(L, &errors);
-        script_done(L, latency_stats, statistics.requests);
+        script_done(L, statistics.latency, statistics.requests);
     }
 
     return 0;
@@ -552,6 +558,12 @@ static int response_complete(http_parser *parser) {
 
     // Record if needed, either last in batch or all, depending in cfg:
     if (cfg.record_all_responses || !c->has_pending) {
+	// Record the latencies so that it may be retrieved later by lua script
+	// This should help in making the violin plots
+        pthread_mutex_lock(&statistics.mutex);
+        stats_record(statistics.latency, expected_latency_timing);
+        pthread_mutex_unlock(&statistics.mutex);
+
         hdr_record_value(thread->latency_histogram, expected_latency_timing);
 
         uint64_t actual_latency_timing = now - c->actual_latency_start;

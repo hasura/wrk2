@@ -120,6 +120,19 @@ void script_push_thread(lua_State *L, thread *t) {
     lua_setmetatable(L, -2);
 }
 
+// Initialize the main lua script with arguments
+void script_init_main(lua_State *L, int argc, char ** argv) {
+    lua_getglobal(L, "wrk");
+    lua_getfield(L, -1, "init");
+    lua_newtable(L);
+    for (int i = 0; i < argc; i++) {
+        lua_pushstring(L, argv[i]);
+        lua_rawseti(L, -2, i);
+    }
+    lua_call(L, 1, 0);
+    lua_pop(L, 1);
+}
+
 void script_init(lua_State *L, thread *t, int argc, char **argv) {
     lua_getglobal(t->L, "wrk");
 
@@ -350,13 +363,8 @@ static int script_stats_get(lua_State *L) {
     stats *s = checkstats(L);
     if (lua_isnumber(L, 2)) {
         int index = luaL_checkint(L, 2);
-        if (s->histogram) {
-            double percentile = 100.0 * ((double) index) / s->histogram->total_count;
-            int64_t value = hdr_value_at_percentile(s->histogram, percentile);
-            lua_pushnumber(L, value);
-        } else {
-            lua_pushnumber(L, s->data[index - 1]);
-        }
+	//Return the stored values instead of getting approximate values from histogram
+        lua_pushnumber(L, s->data[index - 1]);
     } else if (lua_isstring(L, 2)) {
         const char *method = lua_tostring(L, 2);
         if (!strcmp("min",   method)) lua_pushnumber(L, s->min);
