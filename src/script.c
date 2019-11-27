@@ -364,7 +364,10 @@ static int script_stats_get(lua_State *L) {
     if (lua_isnumber(L, 2)) {
         int index = luaL_checkint(L, 2);
 	//Return the stored values instead of getting approximate values from histogram
-        lua_pushnumber(L, s->data[index - 1]);
+        if (index < s->limit)
+          lua_pushnumber(L, s->data[index - 1]);
+        else
+          lua_pushnumber(L, 0);
     } else if (lua_isstring(L, 2)) {
         const char *method = lua_tostring(L, 2);
         if (!strcmp("min",   method)) lua_pushnumber(L, s->min);
