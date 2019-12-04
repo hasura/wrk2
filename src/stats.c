@@ -9,6 +9,7 @@
 
 stats *stats_alloc(uint64_t samples) {
     stats *s = zcalloc(sizeof(stats) + sizeof(uint64_t) * samples);
+    s->raw_data = zcalloc( sizeof(uint64_t) * samples);
     s->samples = samples;
     s->min     = UINT64_MAX;
     s->histogram = NULL;
@@ -16,6 +17,7 @@ stats *stats_alloc(uint64_t samples) {
 }
 
 void stats_free(stats *stats) {
+    zfree(stats->raw_data);
     zfree(stats);
 }
 
@@ -39,6 +41,7 @@ void stats_record(stats *stats, uint64_t x) {
         return;
     }
 
+    stats->raw_data[stats->index] = x;
     stats->data[stats->index++] = x;
     if (stats->limit < stats->samples)  stats->limit++;
     if (stats->index == stats->samples) stats->index = 0;

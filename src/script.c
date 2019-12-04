@@ -365,7 +365,7 @@ static int script_stats_get(lua_State *L) {
         int index = luaL_checkint(L, 2);
 	//Return the stored values instead of getting approximate values from histogram
         if (index < s->limit)
-          lua_pushnumber(L, s->data[index - 1]);
+          lua_pushnumber(L, s->raw_data[index - 1]);
         else
           lua_pushnumber(L, 0);
     } else if (lua_isstring(L, 2)) {

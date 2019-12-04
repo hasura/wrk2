@@ -24,6 +24,7 @@ typedef struct {
     uint64_t min;
     uint64_t max;
     struct hdr_histogram *histogram;
+    uint64_t* raw_data; //The data below does get reordered. Samples here will not be
     uint64_t data[];
 } stats;
 
